@@ -1,0 +1,93 @@
+version: "3.9"
+
+services:
+  zookeeper:
+    image: bitnami/zookeeper:3.8
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: bitnami/kafka:3.7
+    environment:
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+
+  mongo:
+    image: mongo:7
+    restart: always
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=example
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  mongo-express:
+    image: mongo-express:1.0
+    restart: always
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=root
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=example
+      - ME_CONFIG_MONGODB_URL=mongodb://root:example@mongo:27017/
+    ports:
+      - "8081:8081"
+    depends_on:
+      - mongo
+
+  api:
+    build: ./services/api
+    env_file:
+      - ./services/api/.env
+    ports:
+      - "4000:4000"
+    depends_on:
+      - kafka
+      - mongo
+
+  consumer:
+    build: ./services/consumer
+    env_file:
+      - ./services/consumer/.env
+    depends_on:
+      - kafka
+      - mongo
+
+  runner:
+    build: ./services/runner
+    env_file:
+      - ./services/runner/.env
+    depends_on:
+      - kafka
+      - mongo
+
+  poller:
+    build: ./services/poller
+    env_file:
+      - ./services/poller/.env
+    depends_on:
+      - kafka
+      - mongo
+
+  frontend:
+    build: ./apps/dashboard
+    env_file:
+      - ./apps/dashboard/.env
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_BASE=http://api:4000
+    depends_on:
+      - api
+
+volumes:
+  mongo_data:
