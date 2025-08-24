@@ -7,6 +7,11 @@ services:
       - ALLOW_ANONYMOUS_LOGIN=yes
     ports:
       - "2181:2181"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   kafka:
     image: bitnami/kafka:3.7
@@ -20,6 +25,12 @@ services:
       - zookeeper
     ports:
       - "9092:9092"
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions.sh", "--bootstrap-server=localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
   mongo:
     image: mongo:7
@@ -31,6 +42,11 @@ services:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   mongo-express:
     image: mongo-express:1.0
@@ -42,7 +58,8 @@ services:
     ports:
       - "8081:8081"
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
 
   api:
     build: ./services/api
@@ -51,32 +68,40 @@ services:
     ports:
       - "4000:4000"
     depends_on:
-      - kafka
-      - mongo
+      kafka:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
 
   consumer:
     build: ./services/consumer
     env_file:
       - ./services/consumer/.env
     depends_on:
-      - kafka
-      - mongo
+      kafka:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
 
   runner:
     build: ./services/runner
     env_file:
       - ./services/runner/.env
     depends_on:
-      - kafka
-      - mongo
+      kafka:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
 
   poller:
     build: ./services/poller
     env_file:
       - ./services/poller/.env
     depends_on:
-      - kafka
-      - mongo
+      kafka:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
 
   frontend:
     build: ./apps/dashboard

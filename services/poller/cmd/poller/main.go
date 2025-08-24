@@ -9,7 +9,7 @@ import (
 	stringspkg "strings"
 	timepkg "time"
 
-	"github.com/Shopify/sarama"
+	"github.com/IBM/sarama"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/joho/godotenv"
 )

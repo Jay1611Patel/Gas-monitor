@@ -2,8 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
 import { generateNonce, SiweMessage } from 'siwe'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { ethers } from 'ethers'
 
-const api = axios.create({ baseURL: import.meta.env.VITE_API_BASE || 'http://localhost:4000' })
+const baseURL = window.location.hostname === 'localhost'
+  ? 'http://localhost:4000'
+  : 'http://api:4000'
+
+const api = axios.create({ baseURL })
 
 function useAuth() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('jwt'))
@@ -17,10 +22,12 @@ function useAuth() {
       return;
     }
     const [addr] = await (window as any).ethereum.request({ method: 'eth_requestAccounts' })
-    const { data: { nonce } } = await api.post('/auth/nonce', { address: addr })
+    const checksummedAddr = ethers.getAddress(addr)
+    const { data: { nonce } } = await api.post('/auth/nonce', { address: checksummedAddr })
+    console.log('address: ', checksummedAddr);
     const msg = new SiweMessage({
       domain: window.location.host,
-      address: addr,
+      address: checksummedAddr,
       statement: 'Sign in to Gas Cost Monitor',
       uri: window.location.origin,
       version: '1',
