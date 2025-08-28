@@ -56,6 +56,8 @@ export default function App() {
   const [owner, setOwner] = useState('')
   const [repo, setRepo] = useState('')
   const [branch, setBranch] = useState('main')
+  const [repos, setRepos] = useState<any[]>([])
+  const [branches, setBranches] = useState<string[]>([])
 
   const [reports, setReports] = useState<any[]>([])
   const [left, setLeft] = useState<string>('')
@@ -67,8 +69,38 @@ export default function App() {
 
   useEffect(() => {
     if (!token) return
-    api.get('/reports', { headers }).then(r => setReports(r.data.items || [])).catch(() => {})
+    // load repos for dropdown
+    api.get('/repos', { headers }).then(r => setRepos(r.data.repos || [])).catch(() => {})
   }, [token])
+
+  useEffect(() => {
+    if (!token) return
+    if (owner && repo) {
+      api.get('/branches', { params: { owner, repo }, headers }).then(r => setBranches(r.data.branches || [])).catch(() => setBranches([]))
+      api.get('/reports', { params: { owner, repo, branch }, headers }).then(r => setReports(r.data.items || [])).catch(() => setReports([]))
+    }
+  }, [token, owner, repo, branch])
+
+  useEffect(() => {
+    if (!token) return
+    // SSE auto-refresh
+    const es = new EventSource(`${baseURL}/reports/stream?token=${encodeURIComponent(token)}`)
+    es.onmessage = () => {}
+    es.addEventListener('report', (ev: MessageEvent) => {
+      try {
+        const payload = JSON.parse(ev.data)
+        if (payload?.type === 'new-report') {
+          const r = payload.report
+          if (r.owner === owner && r.repo === repo && (!branch || r.branch === branch)) {
+            // refetch latest list
+            api.get('/reports', { params: { owner, repo, branch }, headers }).then(res => setReports(res.data.items || []))
+          }
+        }
+      } catch {}
+    })
+    es.onerror = () => {}
+    return () => es.close()
+  }, [token, owner, repo, branch])
 
   const connectRepo = async () => {
     await api.post('/repos/connect', { owner, repo, defaultBranch: branch }, { headers })
@@ -119,6 +151,18 @@ export default function App() {
 
         <div className="p-4 bg-white rounded shadow lg:col-span-2">
           <h2 className="font-semibold mb-3">Latest Reports</h2>
+          <div className="flex gap-2 mb-3">
+            <select value={`${owner}/${repo}`} onChange={e=>{ const [o,r] = e.target.value.split('/'); setOwner(o||''); setRepo(r||'') }} className="border p-2 rounded">
+              <option value="/">Select Repo</option>
+              {repos.map((r:any)=> (
+                <option key={`${r.owner}/${r.repo}`} value={`${r.owner}/${r.repo}`}>{r.owner}/{r.repo}</option>
+              ))}
+            </select>
+            <select value={branch} onChange={e=>setBranch(e.target.value)} className="border p-2 rounded">
+              <option value="">All Branches</option>
+              {branches.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead className="text-left">
@@ -149,8 +193,14 @@ export default function App() {
       <div className="p-4 bg-white rounded shadow">
         <h2 className="font-semibold mb-3">Compare Reports</h2>
         <div className="flex gap-2">
-          <input value={left} onChange={e=>setLeft(e.target.value)} placeholder="left report _id" className="border p-2 rounded w-full" />
-          <input value={right} onChange={e=>setRight(e.target.value)} placeholder="right report _id" className="border p-2 rounded w-full" />
+          <select value={left} onChange={e=>setLeft(e.target.value)} className="border p-2 rounded w-full">
+            <option value="">Left report</option>
+            {reports.map(r => <option key={r._id} value={r._id}>{r.owner}/{r.repo}@{r.branch} — {new Date(r.createdAt).toLocaleString()}</option>)}
+          </select>
+          <select value={right} onChange={e=>setRight(e.target.value)} className="border p-2 rounded w-full">
+            <option value="">Right report</option>
+            {reports.map(r => <option key={r._id} value={r._id}>{r.owner}/{r.repo}@{r.branch} — {new Date(r.createdAt).toLocaleString()}</option>)}
+          </select>
           <button onClick={doCompare} className="px-3 py-2 bg-gray-900 text-white rounded">Compare</button>
         </div>
         {comparison && (

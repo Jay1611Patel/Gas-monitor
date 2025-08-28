@@ -6,6 +6,7 @@ A SaaS-style monorepo that analyzes Ethereum smart contract gas usage end-to-end
 - Kafka pipeline stores results in MongoDB
 - React dashboard shows reports, compares PRs, and visualizes live on-chain gas usage
 - Go poller streams on-chain gas per contract to Kafka
+- Prometheus and Grafana visualize and alert on gas metrics
 
 ## Monorepo Structure
 
@@ -89,6 +90,8 @@ Services:
 - Dashboard: http://localhost:5173
 - Mongo Express: http://localhost:8081 (user/pass: root/example)
 - Kafka: kafka:9092 (internal)
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3000 (admin/admin)
 
 2) Open the dashboard
 
