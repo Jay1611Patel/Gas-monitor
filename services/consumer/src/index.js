@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { Kafka } from 'kafkajs';
 import { MongoClient } from 'mongodb';
+import axios from 'axios';
 
 dotenv.config();
 
@@ -30,7 +31,15 @@ await consumer.run({
       const payload = JSON.parse(value);
       if (topic === 'gas-run-results') {
         payload.createdAt = new Date();
-        await reportsCol.insertOne(payload);
+        const result = await reportsCol.insertOne(payload);
+        try {
+          await axios.post(process.env.API_INTERNAL_URL || 'http://api:4000/internal/reports/new', {
+            _id: result.insertedId,
+            ...payload
+          }, { timeout: 2000 });
+        } catch (e) {
+          // best effort
+        }
       } else if (topic === 'onchain-gas') {
         payload.createdAt = new Date();
         await onchainCol.insertOne(payload);

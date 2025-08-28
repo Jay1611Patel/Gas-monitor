@@ -1,0 +1,29 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 0,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Gas Execution Average by Contract/Method",
+      "targets": [
+        {
+          "expr": "gas_execution_average{owner=~\"$owner\",repo=~\"$repo\",branch=~\"$branch\"}",
+          "legendFormat": "{{contract}}.{{method}} ({{branch}})",
+          "refId": "A"
+        }
+      ],
+      "options": {"legend": {"displayMode": "list"}},
+      "fieldConfig": {"defaults": {"unit": "short"}}
+    }
+  ],
+  "templating": {
+    "list": [
+      {"name": "owner", "type": "textbox", "label": "Owner", "query": "", "current": {"text": ".*", "value": ".*"}},
+      {"name": "repo", "type": "textbox", "label": "Repo", "query": "", "current": {"text": ".*", "value": ".*"}},
+      {"name": "branch", "type": "textbox", "label": "Branch", "query": "", "current": {"text": ".*", "value": ".*"}}
+    ]
+  },
+  "title": "Gas Monitor",
+  "version": 1
+}

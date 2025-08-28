@@ -7,6 +7,7 @@ import { MongoClient, ObjectId } from 'mongodb';
 import { Kafka } from 'kafkajs';
 import { SiweMessage } from 'siwe';
 import axios from 'axios';
+import client from 'prom-client';
 
 dotenv.config();
 
@@ -22,6 +23,19 @@ const JWT_SECRET = process.env.JWT_SECRET || 'devsecretjwt';
 const MONGO_URL = process.env.MONGO_URL || 'mongodb://root:example@mongo:27017/?authSource=admin';
 const KAFKA_BROKER = process.env.KAFKA_BROKER || 'kafka:9092';
 const KAFKA_CLIENT_ID = process.env.KAFKA_CLIENT_ID || 'api-service';
+
+// Prometheus metrics
+const register = new client.Registry();
+client.collectDefaultMetrics({ register });
+const gasGauge = new client.Gauge({
+  name: 'gas_execution_average',
+  help: 'Average execution gas per contract/method',
+  labelNames: ['tenantId', 'owner', 'repo', 'branch', 'contract', 'method']
+});
+register.registerMetric(gasGauge);
+
+// SSE clients keyed by tenantId
+const tenantToClients = new Map();
 
 // Mongo setup
 const mongoClient = new MongoClient(MONGO_URL, { serverSelectionTimeoutMS: 10000 });
@@ -42,7 +56,10 @@ const nonceStore = new Map();
 
 function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  let token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token && req.query && req.query.token) {
+    token = String(req.query.token);
+  }
   if (!token) return res.status(401).json({ error: 'Missing token' });
   try {
     const payload = jwt.verify(token, JWT_SECRET);
@@ -131,12 +148,28 @@ app.post('/repos/connect', authMiddleware, async (req, res) => {
   res.json({ ok: true });
 });
 
+// List connected repos and branches for a tenant
+app.get('/repos', authMiddleware, async (req, res) => {
+  const tenantId = req.user.tenantId;
+  const repos = await reposCol.find({ tenantId }).toArray();
+  res.json({ repos });
+});
+
+// List branches seen in reports for a given repo
+app.get('/branches', authMiddleware, async (req, res) => {
+  const tenantId = req.user.tenantId;
+  const { owner, repo } = req.query;
+  if (!owner || !repo) return res.status(400).json({ error: 'owner and repo required' });
+  const branches = await reportsCol.distinct('branch', { tenantId, owner, repo });
+  res.json({ branches });
+});
+
 // Webhook endpoint stub for GitHub (PR events)
 app.post('/webhooks/github', async (req, res) => {
   // In production validate signature header using GITHUB_WEBHOOK_SECRET
   const event = req.headers['x-github-event'];
   const payload = req.body;
-  if (event === 'pull_request' && payload?.action === 'opened') {
+  if (event === 'pull_request' && (payload?.action === 'opened' || payload?.action === 'synchronize' || payload?.action === 'reopened')) {
     const owner = payload.repository.owner.login;
     const repo = payload.repository.name;
     const prNumber = payload.number;
@@ -157,7 +190,12 @@ app.post('/webhooks/github', async (req, res) => {
 // Reports query
 app.get('/reports', authMiddleware, async (req, res) => {
   const tenantId = req.user.tenantId;
-  const cursor = reportsCol.find({ tenantId }).sort({ createdAt: -1 }).limit(100);
+  const { owner, repo, branch, limit = 100 } = req.query || {};
+  const q = { tenantId };
+  if (owner) q.owner = owner;
+  if (repo) q.repo = repo;
+  if (branch) q.branch = branch;
+  const cursor = reportsCol.find(q).sort({ createdAt: -1 }).limit(Number(limit) || 100);
   const items = await cursor.toArray();
   res.json({ items });
 });
@@ -184,6 +222,84 @@ app.get('/onchain/:address', authMiddleware, async (req, res) => {
   const address = String(req.params.address).toLowerCase();
   const items = await onchainCol.find({ tenantId, contract: address }).sort({ blockNumber: -1 }).limit(500).toArray();
   res.json({ items });
+});
+
+// SSE stream for new reports per tenant
+app.get('/reports/stream', authMiddleware, async (req, res) => {
+  const tenantId = req.user.tenantId;
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders && res.flushHeaders();
+
+  const client = res;
+  const list = tenantToClients.get(tenantId) || new Set();
+  list.add(client);
+  tenantToClients.set(tenantId, list);
+
+  client.write(`event: heartbeat\n`);
+  client.write(`data: {"ok":true}\n\n`);
+
+  req.on('close', () => {
+    const set = tenantToClients.get(tenantId);
+    if (set) {
+      set.delete(client);
+      if (set.size === 0) tenantToClients.delete(tenantId);
+    }
+  });
+});
+
+// Prometheus metrics endpoint
+app.get('/metrics', async (_req, res) => {
+  try {
+    res.set('Content-Type', register.contentType);
+    res.end(await register.metrics());
+  } catch (err) {
+    res.status(500).end(String(err));
+  }
+});
+
+// Internal hook for new report notification (called by consumer)
+app.post('/internal/reports/new', async (req, res) => {
+  try {
+    const doc = req.body || {};
+    const tenantId = doc.tenantId;
+    const reportArray = Array.isArray(doc.report) ? doc.report : null;
+    if (reportArray) {
+      for (const item of reportArray) {
+        const labels = {
+          tenantId,
+          owner: doc.owner,
+          repo: doc.repo,
+          branch: doc.branch || '',
+          contract: item.contract || 'unknown',
+          method: item.method || 'unknown'
+        };
+        const value = Number(item.executionGasAverage) || 0;
+        gasGauge.set(labels, value);
+      }
+    }
+    const set = tenantToClients.get(tenantId);
+    if (set && set.size > 0) {
+      const payload = JSON.stringify({
+        type: 'new-report',
+        report: {
+          _id: doc._id,
+          owner: doc.owner,
+          repo: doc.repo,
+          branch: doc.branch,
+          prNumber: doc.prNumber,
+          createdAt: doc.createdAt,
+        }
+      });
+      for (const r of set) {
+        try { r.write(`event: report\n`); r.write(`data: ${payload}\n\n`); } catch {}
+      }
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 app.listen(PORT, () => {
