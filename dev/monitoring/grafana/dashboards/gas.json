@@ -17,6 +17,17 @@
       "fieldConfig": {"defaults": {"unit": "short"}}
     },
     {
+      "type": "timeseries",
+      "title": "p95 Gas (5m)",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(gas_execution_histogram_bucket{owner=~\"$owner\",repo=~\"$repo\",branch=~\"$branch\",contract=~\"$contract\",method=~\"$method\"}[5m])) by (le,contract,method))",
+          "legendFormat": "p95 {{contract}}.{{method}}",
+          "refId": "B"
+        }
+      ]
+    },
+    {
       "type": "histogram",
       "title": "Gas Distribution",
       "targets": [
@@ -24,6 +35,17 @@
           "expr": "histogram_quantile(0.95, sum(rate(gas_execution_histogram_bucket{owner=~\"$owner\",repo=~\"$repo\",branch=~\"$branch\",contract=~\"$contract\",method=~\"$method\"}[5m])) by (le,contract,method))",
           "legendFormat": "p95 {{contract}}.{{method}}",
           "refId": "B"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "On-chain Gas p95 (5m)",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(onchain_gas_used_histogram_bucket{tenantId=~\"$tenant\",contract=~\"$onchain_contract\"}[5m])) by (le,contract))",
+          "legendFormat": "p95 onchain {{contract}}",
+          "refId": "D"
         }
       ]
     },
@@ -45,7 +67,9 @@
       {"name": "repo", "type": "textbox", "label": "Repo", "query": "", "current": {"text": ".*", "value": ".*"}},
       {"name": "branch", "type": "textbox", "label": "Branch", "query": "", "current": {"text": ".*", "value": ".*"}},
       {"name": "contract", "type": "textbox", "label": "Contract", "query": "", "current": {"text": ".*", "value": ".*"}},
-      {"name": "method", "type": "textbox", "label": "Method", "query": "", "current": {"text": ".*", "value": ".*"}}
+      {"name": "method", "type": "textbox", "label": "Method", "query": "", "current": {"text": ".*", "value": ".*"}},
+      {"name": "tenant", "type": "textbox", "label": "Tenant", "query": "", "current": {"text": ".*", "value": ".*"}},
+      {"name": "onchain_contract", "type": "textbox", "label": "On-chain Contract", "query": "", "current": {"text": ".*", "value": ".*"}}
     ]
   },
   "title": "Gas Monitor",

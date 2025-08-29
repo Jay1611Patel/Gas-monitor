@@ -396,3 +396,34 @@ app.post('/internal/onchain/new', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`API listening on :${PORT}`);
 });
+
+// Backfill Prometheus metrics from recent Mongo reports on startup
+;(async function backfillMetrics() {
+  try {
+    const cursor = reportsCol.find({ report: { $type: 'array' } }).sort({ createdAt: -1 }).limit(1000);
+    const items = await cursor.toArray();
+    for (const doc of items) {
+      const tenantId = doc.tenantId;
+      if (!Array.isArray(doc.report)) continue;
+      for (const item of doc.report) {
+        const labels = {
+          tenantId,
+          owner: doc.owner,
+          repo: doc.repo,
+          branch: doc.branch || '',
+          contract: item.contract || 'unknown',
+          method: item.method || 'unknown',
+          prNumber: String(doc.prNumber ?? ''),
+          commitSha: String(doc.commitSha ?? ''),
+        };
+        const value = Number(item.executionGasAverage) || 0;
+        gasGauge.set(labels, value);
+        gasHistogram.observe(labels, value);
+        gasSummary.observe(labels, value);
+      }
+    }
+    console.log(`Backfilled metrics from ${items.length} reports.`);
+  } catch (err) {
+    console.error('Backfill metrics error:', err);
+  }
+})();

@@ -11,16 +11,32 @@
     },
     {
       "type": "timeseries",
+      "title": "p95 Gas (Left, 5m)",
+      "gridPos": {"h": 6, "w": 24, "x": 0, "y": 18},
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum(rate(gas_execution_histogram_bucket{owner=~\"$owner\",repo=~\"$repo\",branch=~\"$left\",contract=~\"$contract\",method=~\"$method\"}[5m])) by (le,contract,method))", "refId": "B"}
+      ]
+    },
+    {
+      "type": "timeseries",
       "title": "Avg Gas Over Time (Right)",
-      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 9},
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 24},
       "targets": [
         {"expr": "gas_execution_average{owner=~\"$owner\",repo=~\"$repo\",branch=~\"$right\",contract=~\"$contract\",method=~\"$method\"}", "refId": "A"}
       ]
     },
     {
+      "type": "timeseries",
+      "title": "p95 Gas (Right, 5m)",
+      "gridPos": {"h": 6, "w": 24, "x": 0, "y": 33},
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum(rate(gas_execution_histogram_bucket{owner=~\"$owner\",repo=~\"$repo\",branch=~\"$right\",contract=~\"$contract\",method=~\"$method\"}[5m])) by (le,contract,method))", "refId": "C"}
+      ]
+    },
+    {
       "type": "table",
       "title": "Top Deltas (Right - Left)",
-      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 18},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 39},
       "targets": [
         {"expr": "topk(20, (gas_execution_average{branch=~\"$right\"} - on(github_label) gas_execution_average{branch=~\"$left\"}))", "refId": "A"}
       ]

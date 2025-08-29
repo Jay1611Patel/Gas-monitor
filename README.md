@@ -92,6 +92,7 @@ Services:
 - Kafka: kafka:9092 (internal)
 - Prometheus: http://localhost:9090
 - Grafana: http://localhost:3000 (admin/admin)
+  - Prometheus data is persisted to a Docker volume so dashboards retain history across restarts.
 
 2) Open the dashboard
 
@@ -185,6 +186,9 @@ Interpreting Metrics
 - `gas_execution_average` is a gauge labeled by tenant/repo/branch/contract/method/prNumber/commitSha set on each new report.
 - `gas_execution_histogram`/`_summary` enable p50/p95/p99 and histograms over time.
 - On-chain: `onchain_gas_used_histogram`/`_summary` for live gasUsed per tx per contract.
+
+Persistence
+- Prometheus TSDB is persisted in the `prometheus_data` volume with 90d retention, so Grafana retains history after restarts.
 
 ## Health and Troubleshooting
 

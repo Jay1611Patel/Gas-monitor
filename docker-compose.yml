@@ -118,8 +118,11 @@ services:
     image: prom/prometheus:v2.55.1
     command:
       - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=90d
     volumes:
       - ./dev/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
     ports:
       - "9090:9090"
     depends_on:
@@ -135,6 +138,7 @@ services:
     volumes:
       - ./dev/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./dev/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
     ports:
       - "3000:3000"
     depends_on:
@@ -143,3 +147,5 @@ services:
 
 volumes:
   mongo_data:
+  prometheus_data:
+  grafana_data:
