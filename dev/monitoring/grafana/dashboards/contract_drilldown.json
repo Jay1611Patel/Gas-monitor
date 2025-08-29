@@ -10,9 +10,17 @@
       ]
     },
     {
+      "type": "timeseries",
+      "title": "p95 Gas (5m)",
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 9},
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum(rate(gas_execution_histogram_bucket{owner=~\"$owner\",repo=~\"$repo\",contract=~\"$contract\",method=~\"$method\"}[5m])) by (le))", "refId": "B"}
+      ]
+    },
+    {
       "type": "histogram",
       "title": "Gas Distribution",
-      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 9},
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 18},
       "targets": [
         {"expr": "sum(rate(gas_execution_histogram_bucket{owner=~\"$owner\",repo=~\"$repo\",contract=~\"$contract\",method=~\"$method\"}[5m])) by (le)", "refId": "A"}
       ]

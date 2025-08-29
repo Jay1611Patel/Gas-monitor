@@ -171,33 +171,33 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen p-6 space-y-6">
+    <div className="min-h-screen p-6 space-y-6 bg-gray-50">
       <div className="flex items-center justify-between">
-        <div className="text-gray-700">Connected: {address}</div>
-        <button onClick={logout} className="px-3 py-1 border rounded">Logout</button>
+        <div className="text-gray-700 font-medium">Connected: {address}</div>
+        <button onClick={logout} className="px-3 py-1 border rounded hover:bg-gray-100">Logout</button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="p-4 bg-white rounded shadow">
-          <h2 className="font-semibold mb-3">Connect GitHub Repo</h2>
+        <div className="p-5 bg-white rounded-xl shadow">
+          <h2 className="font-semibold mb-3 text-lg">Connect GitHub Repo</h2>
           <div className="space-y-2">
-            <input value={owner} onChange={e=>setOwner(e.target.value)} placeholder="owner" className="w-full border p-2 rounded" />
-            <input value={repo} onChange={e=>setRepo(e.target.value)} placeholder="repo" className="w-full border p-2 rounded" />
-            <input value={branch} onChange={e=>setBranch(e.target.value)} placeholder="default branch" className="w-full border p-2 rounded" />
-            <button onClick={connectRepo} className="px-3 py-2 bg-blue-600 text-white rounded">Connect & Run</button>
+            <input value={owner} onChange={e=>setOwner(e.target.value)} placeholder="owner" className="w-full border p-2 rounded focus:outline-none focus:ring" />
+            <input value={repo} onChange={e=>setRepo(e.target.value)} placeholder="repo" className="w-full border p-2 rounded focus:outline-none focus:ring" />
+            <input value={branch} onChange={e=>setBranch(e.target.value)} placeholder="default branch" className="w-full border p-2 rounded focus:outline-none focus:ring" />
+            <button onClick={connectRepo} className="px-3 py-2 bg-blue-600 hover:bg-blue-700 transition text-white rounded">Connect & Run</button>
           </div>
         </div>
 
-        <div className="p-4 bg-white rounded shadow lg:col-span-2">
-          <h2 className="font-semibold mb-3">Latest Reports</h2>
+        <div className="p-5 bg-white rounded-xl shadow lg:col-span-2">
+          <h2 className="font-semibold mb-3 text-lg">Latest Reports</h2>
           <div className="flex gap-2 mb-3">
-            <select value={`${owner}/${repo}`} onChange={e=>{ const [o,r] = e.target.value.split('/'); setOwner(o||''); setRepo(r||'') }} className="border p-2 rounded">
+            <select value={`${owner}/${repo}`} onChange={e=>{ const [o,r] = e.target.value.split('/'); setOwner(o||''); setRepo(r||'') }} className="border p-2 rounded focus:outline-none">
               <option value="/">Select Repo</option>
               {repos.map((r:any)=> (
                 <option key={`${r.owner}/${r.repo}`} value={`${r.owner}/${r.repo}`}>{r.owner}/{r.repo}</option>
               ))}
             </select>
-            <select value={branch} onChange={e=>setBranch(e.target.value)} className="border p-2 rounded">
+            <select value={branch} onChange={e=>setBranch(e.target.value)} className="border p-2 rounded focus:outline-none">
               <option value="">All Branches</option>
               {branches.map(b => <option key={b} value={b}>{b}</option>)}
             </select>
@@ -229,8 +229,8 @@ export default function App() {
         </div>
       </div>
 
-      <div className="p-4 bg-white rounded shadow">
-        <h2 className="font-semibold mb-3">Compare Reports</h2>
+      <div className="p-5 bg-white rounded-xl shadow">
+        <h2 className="font-semibold mb-3 text-lg">Compare Reports</h2>
         <div className="flex gap-2">
           <select value={left} onChange={e=>setLeft(e.target.value)} className="border p-2 rounded w-full">
             <option value="">Left report</option>
@@ -240,7 +240,7 @@ export default function App() {
             <option value="">Right report</option>
             {reports.map(r => <option key={r._id} value={r._id}>{r.owner}/{r.repo}@{r.branch} — {new Date(r.createdAt).toLocaleString()}</option>)}
           </select>
-          <button onClick={doCompare} className="px-3 py-2 bg-gray-900 text-white rounded">Compare</button>
+          <button onClick={doCompare} className="px-3 py-2 bg-gray-900 hover:bg-black transition text-white rounded">Compare</button>
         </div>
         {comparison && (
           <div className="mt-4 space-y-6">
@@ -273,18 +273,18 @@ export default function App() {
         )}
       </div>
 
-      <div className="p-4 bg-white rounded shadow">
-        <h2 className="font-semibold mb-3">On-chain Gas Usage</h2>
+      <div className="p-5 bg-white rounded-xl shadow">
+        <h2 className="font-semibold mb-3 text-lg">On-chain Gas Usage</h2>
         <div className="flex gap-2 mb-3">
           <input value={onchainAddr} onChange={e=>setOnchainAddr(e.target.value)} placeholder="contract address" className="border p-2 rounded w-full" />
-          <button onClick={loadOnchain} className="px-3 py-2 bg-green-600 text-white rounded">Load</button>
-          <button onClick={addWatch} className="px-3 py-2 bg-blue-600 text-white rounded">Watch</button>
+          <button onClick={loadOnchain} className="px-3 py-2 bg-green-600 hover:bg-green-700 transition text-white rounded">Load</button>
+          <button onClick={addWatch} className="px-3 py-2 bg-blue-600 hover:bg-blue-700 transition text-white rounded">Watch</button>
         </div>
         <div className="mb-3">
           <div className="text-sm font-medium mb-1">Your watched contracts</div>
           <div className="flex flex-wrap gap-2">
             {watches.map(w => (
-              <div key={w.contract} className="px-2 py-1 border rounded text-sm flex items-center gap-2">
+              <div key={w.contract} className="px-2 py-1 border rounded text-sm flex items-center gap-2 bg-gray-50">
                 <span>{w.contract}</span>
                 <button onClick={()=>removeWatch(w.contract)} className="text-red-600">×</button>
               </div>
