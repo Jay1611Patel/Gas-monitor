@@ -284,10 +284,9 @@ export default function App() {
           <div className="text-sm font-medium mb-1">Your watched contracts</div>
           <div className="flex flex-wrap gap-2">
             {watches.map(w => (
-              <div key={w.contract} className="px-2 py-1 border rounded text-sm flex items-center gap-2 bg-gray-50">
-                <span>{w.contract}</span>
-                <button onClick={()=>removeWatch(w.contract)} className="text-red-600">×</button>
-              </div>
+              <button key={w.contract} onClick={()=>{ setOnchainAddr(w.contract); loadOnchain(); }} className="px-2 py-1 border rounded text-sm bg-gray-50 hover:bg-white">
+                {w.contract}
+              </button>
             ))}
           </div>
         </div>
@@ -308,6 +307,9 @@ export default function App() {
             </AreaChart>
           </ResponsiveContainer>
         </div>
+        {onchain.length === 0 && (
+          <div className="text-sm text-gray-500 mt-2">No on-chain activity for this contract in recent history.</div>
+        )}
       </div>
     </div>
   )
