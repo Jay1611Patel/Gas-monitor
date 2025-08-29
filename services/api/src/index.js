@@ -78,6 +78,7 @@ const usersCol = db.collection('users');
 const reportsCol = db.collection('reports');
 const reposCol = db.collection('repos');
 const onchainCol = db.collection('onchain_metrics');
+const watchesCol = db.collection('onchain_watches');
 
 // Kafka setup
 const kafka = new Kafka({ clientId: KAFKA_CLIENT_ID, brokers: [KAFKA_BROKER] });
@@ -254,6 +255,45 @@ app.get('/onchain/:address', authMiddleware, async (req, res) => {
   const tenantId = req.user.tenantId;
   const address = String(req.params.address).toLowerCase();
   const items = await onchainCol.find({ tenantId, contract: address }).sort({ blockNumber: -1 }).limit(500).toArray();
+  res.json({ items });
+});
+
+// On-chain dynamic watch management
+app.get('/onchain/watches', authMiddleware, async (req, res) => {
+  const tenantId = req.user.tenantId;
+  const items = await watchesCol.find({ tenantId }).sort({ createdAt: -1 }).toArray();
+  res.json({ items });
+});
+
+app.post('/onchain/watches', authMiddleware, async (req, res) => {
+  const tenantId = req.user.tenantId;
+  const { contract } = req.body || {};
+  if (!contract) return res.status(400).json({ error: 'contract required' });
+  const address = String(contract).toLowerCase();
+  await watchesCol.updateOne(
+    { tenantId, contract: address },
+    { $set: { tenantId, contract: address, createdAt: new Date() } },
+    { upsert: true }
+  );
+  // publish watch add
+  await producer.send({ topic: 'onchain-watch-requests', messages: [{ value: JSON.stringify({ tenantId, contract: address, action: 'add' }) }]});
+  res.json({ ok: true });
+});
+
+app.delete('/onchain/watches/:contract', authMiddleware, async (req, res) => {
+  const tenantId = req.user.tenantId;
+  const contract = String(req.params.contract).toLowerCase();
+  await watchesCol.deleteOne({ tenantId, contract });
+  // publish watch remove
+  await producer.send({ topic: 'onchain-watch-requests', messages: [{ value: JSON.stringify({ tenantId, contract, action: 'remove' }) }]});
+  res.json({ ok: true });
+});
+
+// Internal: list watches for a tenant
+app.get('/internal/onchain/watches', async (req, res) => {
+  const { tenantId } = req.query || {};
+  if (!tenantId) return res.status(400).json({ error: 'tenantId required' });
+  const items = await watchesCol.find({ tenantId: String(tenantId).toLowerCase() }).toArray();
   res.json({ items });
 });
 

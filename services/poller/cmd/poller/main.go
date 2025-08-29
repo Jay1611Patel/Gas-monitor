@@ -3,8 +3,10 @@ package main
 import (
 	contextpkg "context"
 	encodingjson "encoding/json"
+	iopkg "io"
 	logpkg "log"
 	mathbig "math/big"
+	nethttppkg "net/http"
 	ospkg "os"
 	stringspkg "strings"
 	timepkg "time"
@@ -27,20 +29,33 @@ func main() {
 	broker := getenv("KAFKA_BROKER", "kafka:9092")
 	topic := getenv("KAFKA_TOPIC", "onchain-gas")
 	rpcURL := getenv("ETH_RPC_URL", "")
-	addrCSV := getenv("CONTRACT_ADDRESSES", "")
 	tenant := getenv("TENANT_ID", "")
 
-	if rpcURL == "" || addrCSV == "" || tenant == "" {
-		logpkg.Fatal("ETH_RPC_URL, CONTRACT_ADDRESSES, TENANT_ID are required")
+	if rpcURL == "" || tenant == "" {
+		logpkg.Fatal("ETH_RPC_URL and TENANT_ID are required")
 	}
 
 	targets := make(map[string]bool)
-	for _, a := range stringspkg.Split(addrCSV, ",") {
-		if a == "" {
-			continue
+	// bootstrap existing watches from API
+	apiBase := getenv("API_BASE", "http://api:4000")
+	func() {
+		req, _ := nethttppkg.NewRequest("GET", apiBase+"/internal/onchain/watches?tenantId="+tenant, nil)
+		resp, err := nethttppkg.DefaultClient.Do(req)
+		if err != nil {
+			logpkg.Printf("bootstrap watches: %v", err)
+			return
 		}
-		targets[stringspkg.ToLower(a)] = true
-	}
+		defer resp.Body.Close()
+		body, _ := iopkg.ReadAll(resp.Body)
+		var out struct{
+			Items []struct{ Contract string `json:"contract"` } `json:"items"`
+		}
+		_ = encodingjson.Unmarshal(body, &out)
+		for _, it := range out.Items {
+			targets[stringspkg.ToLower(it.Contract)] = true
+		}
+		logpkg.Printf("loaded %d watches", len(out.Items))
+	}()
 
 	client, err := ethclient.Dial(rpcURL)
 	if err != nil {
@@ -55,6 +70,23 @@ func main() {
 		logpkg.Fatalf("kafka producer: %v", err)
 	}
 	defer producer.Close()
+
+	// also consume dynamic watch updates
+	cfgC := sarama.NewConfig()
+	cfgC.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRoundRobin
+	consumer, err := sarama.NewConsumerGroup([]string{broker}, "onchain-watchers", cfgC)
+	if err != nil {
+		logpkg.Fatalf("kafka consumer: %v", err)
+	}
+	go func() {
+		for {
+			err := consumer.Consume(contextpkg.Background(), []string{"onchain-watch-requests"}, consumerGroupHandler{targets: targets, tenant: tenant})
+			if err != nil {
+				logpkg.Printf("consume watch: %v", err)
+				timepkg.Sleep(2 * timepkg.Second)
+			}
+		}
+	}()
 
 	ctx := contextpkg.Background()
 	// initialize last to current head on start to avoid backfill
@@ -107,4 +139,28 @@ func main() {
 		}
 		last = head.NumberU64()
 	}
+}
+
+type consumerGroupHandler struct{ targets map[string]bool; tenant string }
+
+func (h consumerGroupHandler) Setup(s sarama.ConsumerGroupSession) error   { return nil }
+func (h consumerGroupHandler) Cleanup(s sarama.ConsumerGroupSession) error { return nil }
+func (h consumerGroupHandler) ConsumeClaim(s sarama.ConsumerGroupSession, c sarama.ConsumerGroupClaim) error {
+	for msg := range c.Messages() {
+		var payload struct{
+			TenantId string `json:"tenantId"`
+			Contract string `json:"contract"`
+			Action string `json:"action"`
+		}
+		_ = encodingjson.Unmarshal(msg.Value, &payload)
+		if payload.TenantId != h.tenant { continue }
+		address := stringspkg.ToLower(payload.Contract)
+		if payload.Action == "add" {
+			h.targets[address] = true
+		} else if payload.Action == "remove" {
+			delete(h.targets, address)
+		}
+		s.MarkMessage(msg, "")
+	}
+	return nil
 }

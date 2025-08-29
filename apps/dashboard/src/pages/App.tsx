@@ -85,6 +85,7 @@ export default function App() {
 
   const [onchainAddr, setOnchainAddr] = useState('')
   const [onchain, setOnchain] = useState<any[]>([])
+  const [watches, setWatches] = useState<any[]>([])
 
   useEffect(() => {
     if (!token) return
@@ -137,6 +138,25 @@ export default function App() {
     const { data } = await api.get(`/onchain/${onchainAddr}`, { headers })
     setOnchain(data.items || [])
   }
+
+  const loadWatches = async () => {
+    const { data } = await api.get('/onchain/watches', { headers })
+    setWatches(data.items || [])
+  }
+
+  const addWatch = async () => {
+    if (!onchainAddr) return
+    await api.post('/onchain/watches', { contract: onchainAddr }, { headers })
+    setOnchainAddr('')
+    await loadWatches()
+  }
+
+  const removeWatch = async (contract: string) => {
+    await api.delete(`/onchain/watches/${contract}`, { headers })
+    await loadWatches()
+  }
+
+  useEffect(() => { if (token) loadWatches() }, [token])
 
   if (!token) {
     return (
@@ -258,6 +278,18 @@ export default function App() {
         <div className="flex gap-2 mb-3">
           <input value={onchainAddr} onChange={e=>setOnchainAddr(e.target.value)} placeholder="contract address" className="border p-2 rounded w-full" />
           <button onClick={loadOnchain} className="px-3 py-2 bg-green-600 text-white rounded">Load</button>
+          <button onClick={addWatch} className="px-3 py-2 bg-blue-600 text-white rounded">Watch</button>
+        </div>
+        <div className="mb-3">
+          <div className="text-sm font-medium mb-1">Your watched contracts</div>
+          <div className="flex flex-wrap gap-2">
+            {watches.map(w => (
+              <div key={w.contract} className="px-2 py-1 border rounded text-sm flex items-center gap-2">
+                <span>{w.contract}</span>
+                <button onClick={()=>removeWatch(w.contract)} className="text-red-600">×</button>
+              </div>
+            ))}
+          </div>
         </div>
         <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
