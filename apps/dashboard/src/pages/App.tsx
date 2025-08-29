@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
 import { generateNonce, SiweMessage } from 'siwe'
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, BarChart, Bar, Legend } from 'recharts'
 import { ethers } from 'ethers'
 
 const baseURL = window.location.hostname === 'localhost'
@@ -63,6 +63,25 @@ export default function App() {
   const [left, setLeft] = useState<string>('')
   const [right, setRight] = useState<string>('')
   const [comparison, setComparison] = useState<any | null>(null)
+  const comparisonData = useMemo(() => {
+    if (!comparison?.left?.report || !comparison?.right?.report) return []
+    const leftIdx: Record<string, number> = {}
+    for (const item of comparison.left.report) {
+      leftIdx[`${item.contract}.${item.method}`] = item.executionGasAverage
+    }
+    const keys = new Set<string>()
+    for (const item of comparison.left.report) keys.add(`${item.contract}.${item.method}`)
+    for (const item of comparison.right.report) keys.add(`${item.contract}.${item.method}`)
+    const rows: any[] = []
+    for (const k of keys) {
+      const [contract, method] = k.split('.')
+      const l = leftIdx[k] ?? 0
+      const rItem = (comparison.right.report as any[]).find(x => `${x.contract}.${x.method}` === k)
+      const r = rItem ? rItem.executionGasAverage : 0
+      rows.push({ key: k, contract, method, left: l, right: r, delta: r - l })
+    }
+    return rows.sort((a,b)=> Math.abs(b.delta) - Math.abs(a.delta))
+  }, [comparison])
 
   const [onchainAddr, setOnchainAddr] = useState('')
   const [onchain, setOnchain] = useState<any[]>([])
@@ -204,8 +223,32 @@ export default function App() {
           <button onClick={doCompare} className="px-3 py-2 bg-gray-900 text-white rounded">Compare</button>
         </div>
         {comparison && (
-          <div className="mt-4">
-            <pre className="text-xs bg-gray-50 p-3 rounded overflow-auto">{JSON.stringify(comparison, null, 2)}</pre>
+          <div className="mt-4 space-y-6">
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={comparisonData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="key" tick={{ fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={70} />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="left" name="Left Avg Gas" fill="#64748b" />
+                  <Bar dataKey="right" name="Right Avg Gas" fill="#0ea5e9" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="h-60">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={comparisonData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="key" tick={{ fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={70} />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="delta" name="Delta (Right-Left)" fill="#ef4444" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         )}
       </div>

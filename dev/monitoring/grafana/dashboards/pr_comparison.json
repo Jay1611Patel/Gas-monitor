@@ -1,0 +1,37 @@
+{
+  "title": "PR / Branch Comparison",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Avg Gas Over Time (Left)",
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 0},
+      "targets": [
+        {"expr": "gas_execution_average{owner=~\"$owner\",repo=~\"$repo\",branch=~\"$left\",contract=~\"$contract\",method=~\"$method\"}", "refId": "A"}
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Avg Gas Over Time (Right)",
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 9},
+      "targets": [
+        {"expr": "gas_execution_average{owner=~\"$owner\",repo=~\"$repo\",branch=~\"$right\",contract=~\"$contract\",method=~\"$method\"}", "refId": "A"}
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Top Deltas (Right - Left)",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 18},
+      "targets": [
+        {"expr": "topk(20, (gas_execution_average{branch=~\"$right\"} - on(github_label) gas_execution_average{branch=~\"$left\"}))", "refId": "A"}
+      ]
+    }
+  ],
+  "templating": {"list": [
+    {"name": "owner", "type": "textbox", "current": {"text": ".*", "value": ".*"}},
+    {"name": "repo", "type": "textbox", "current": {"text": ".*", "value": ".*"}},
+    {"name": "left", "label": "Left Branch/PR", "type": "textbox", "current": {"text": ".*", "value": ".*"}},
+    {"name": "right", "label": "Right Branch/PR", "type": "textbox", "current": {"text": ".*", "value": ".*"}},
+    {"name": "contract", "type": "textbox", "current": {"text": ".*", "value": ".*"}},
+    {"name": "method", "type": "textbox", "current": {"text": ".*", "value": ".*"}}
+  ]}
+}

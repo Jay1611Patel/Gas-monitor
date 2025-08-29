@@ -43,6 +43,11 @@ await consumer.run({
       } else if (topic === 'onchain-gas') {
         payload.createdAt = new Date();
         await onchainCol.insertOne(payload);
+        try {
+          await axios.post(process.env.API_INTERNAL_URL || 'http://api:4000/internal/onchain/new', payload, { timeout: 2000 });
+        } catch (e) {
+          // best effort
+        }
       }
     } catch (err) {
       console.error('Consumer error:', err);

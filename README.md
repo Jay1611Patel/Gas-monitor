@@ -109,10 +109,10 @@ Services:
 - Consumer writes to MongoDB
 - API exposes `/reports` and the dashboard lists new reports
 
-4) Compare reports
+4) Compare reports visually
 
-- Copy two report `_id` values and paste into the "Compare Reports" section
-- Click "Compare" to retrieve both and display a raw JSON comparison
+- Use the dropdowns to select two latest reports; the app renders bar charts for Left vs Right averages and Delta.
+- In Grafana, open the "PR / Branch Comparison" dashboard to compare branches/PRs with filters.
 
 5) Live on-chain gas
 
@@ -160,6 +160,23 @@ module.exports = {
 ```
 
 Ensure `npx hardhat test` succeeds locally.
+
+## Grafana Dashboards
+
+- Access: http://localhost:3000 (admin/admin)
+- Dashboards:
+  - Global Overview: time series of avg gas, distribution histogram, and top contracts table.
+  - PR / Branch Comparison: select two branches/PRs; shows overlapped time series and top deltas.
+  - Contract/Method Drilldown: pick contract+method; shows trends over commits and distributions.
+
+Filters
+- `owner`, `repo`, `branch`, `contract`, `method` are available as template variables.
+- Use regex like `.*` to see all or exact names to filter.
+
+Interpreting Metrics
+- `gas_execution_average` is a gauge labeled by tenant/repo/branch/contract/method/prNumber/commitSha set on each new report.
+- `gas_execution_histogram`/`_summary` enable p50/p95/p99 and histograms over time.
+- On-chain: `onchain_gas_used_histogram`/`_summary` for live gasUsed per tx per contract.
 
 ## Health and Troubleshooting
 

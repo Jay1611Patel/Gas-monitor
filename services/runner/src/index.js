@@ -115,6 +115,7 @@ async function processRequest(req) {
     if (branch) {
       await repoGit.checkout(branch);
     }
+    const commitSha = await repoGit.revparse(['HEAD']);
 
     // Install dependencies
     const hasPackage = fs.existsSync(path.join(workdir, "package.json"));
@@ -153,6 +154,7 @@ async function processRequest(req) {
       repo,
       branch,
       prNumber: prNumber || null,
+      commitSha,
       reason,
       report: report || {
         note: "No gasReporterOutput.json found; ensure hardhat-gas-reporter is configured.",
@@ -172,6 +174,7 @@ async function processRequest(req) {
       repo,
       branch,
       prNumber: prNumber || null,
+      commitSha: null,
       reason,
       error: String(err),
       createdAt: new Date().toISOString(),

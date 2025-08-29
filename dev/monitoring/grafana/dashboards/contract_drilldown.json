@@ -1,0 +1,35 @@
+{
+  "title": "Contract/Method Drilldown",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Avg Gas by Commit",
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 0},
+      "targets": [
+        {"expr": "gas_execution_average{owner=~\"$owner\",repo=~\"$repo\",contract=~\"$contract\",method=~\"$method\"}", "refId": "A"}
+      ]
+    },
+    {
+      "type": "histogram",
+      "title": "Gas Distribution",
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 9},
+      "targets": [
+        {"expr": "sum(rate(gas_execution_histogram_bucket{owner=~\"$owner\",repo=~\"$repo\",contract=~\"$contract\",method=~\"$method\"}[5m])) by (le)", "refId": "A"}
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Recent Measurements",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 18},
+      "targets": [
+        {"expr": "gas_execution_summary{owner=~\"$owner\",repo=~\"$repo\",contract=~\"$contract\",method=~\"$method\"}", "refId": "A"}
+      ]
+    }
+  ],
+  "templating": {"list": [
+    {"name": "owner", "type": "textbox", "current": {"text": ".*", "value": ".*"}},
+    {"name": "repo", "type": "textbox", "current": {"text": ".*", "value": ".*"}},
+    {"name": "contract", "type": "textbox", "current": {"text": ".*", "value": ".*"}},
+    {"name": "method", "type": "textbox", "current": {"text": ".*", "value": ".*"}}
+  ]}
+}
