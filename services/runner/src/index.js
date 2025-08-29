@@ -191,14 +191,14 @@ async function processRequest(req) {
 }
 
 await consumer.run({
-  eachMessage: async ({ message }) => {
-    const value = message.value?.toString() || "{}";
-    let payload;
+  eachMessage: async ({ topic, partition, message, heartbeat, pause }) => {
+    const value = message.value?.toString();
     try {
-      payload = JSON.parse(value);
-    } catch {
-      return;
+      const payload = JSON.parse(value);
+      await processRequest(payload);
+      await consumer.commitOffsets([{ topic, partition, offset: (Number(message.offset) + 1).toString() }]);
+    } catch (err) {
+      console.error("Failed processing message", err);
     }
-    await processRequest(payload);
   },
 });
