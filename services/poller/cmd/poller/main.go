@@ -8,11 +8,13 @@ import (
 	mathbig "math/big"
 	nethttppkg "net/http"
 	ospkg "os"
+	hexpkg "encoding/hex"
 	stringspkg "strings"
 	timepkg "time"
 
 	"github.com/IBM/sarama"
 	"github.com/ethereum/go-ethereum/ethclient"
+	typespkg "github.com/ethereum/go-ethereum/core/types"
 	"github.com/joho/godotenv"
 )
 
@@ -89,6 +91,10 @@ func main() {
 	}()
 
 	ctx := contextpkg.Background()
+	chainID, err := client.NetworkID(ctx)
+	if err != nil {
+		logpkg.Fatalf("network id: %v", err)
+	}
 	// initialize last to current head on start to avoid backfill
 	head, err := client.BlockByNumber(ctx, nil)
 	if err != nil {
@@ -125,12 +131,57 @@ func main() {
 				if err != nil {
 					continue
 				}
+				from := ""
+				if tx != nil {
+					// derive sender
+					signer := typespkg.LatestSignerForChainID(chainID)
+					addr, err := typespkg.Sender(signer, tx)
+					if err == nil {
+						from = stringspkg.ToLower(addr.Hex())
+					}
+				}
+				methodSig := ""
+				if data := tx.Data(); len(data) >= 4 {
+					methodSig = "0x" + hexpkg.EncodeToString(data[:4])
+				}
+				// fees
+				effPriceWei := new(mathbig.Int)
+				if rec.EffectiveGasPrice != nil {
+					effPriceWei = rec.EffectiveGasPrice
+				} else if tx.GasPrice() != nil {
+					effPriceWei = tx.GasPrice()
+				}
+				baseFeeWei := blk.BaseFee()
+				priorityWei := new(mathbig.Int).Sub(effPriceWei, baseFeeWei)
+				if priorityWei.Sign() < 0 { priorityWei = mathbig.NewInt(0) }
+				// convert to gwei floats
+				gweiDiv := mathbig.NewFloat(1e9)
+				effGwei := new(mathbig.Float).Quo(new(mathbig.Float).SetInt(effPriceWei), gweiDiv)
+				baseGwei := new(mathbig.Float).Quo(new(mathbig.Float).SetInt(baseFeeWei), gweiDiv)
+				prioGwei := new(mathbig.Float).Quo(new(mathbig.Float).SetInt(priorityWei), gweiDiv)
+				effGweiF, _ := effGwei.Float64()
+				baseGweiF, _ := baseGwei.Float64()
+				prioGweiF, _ := prioGwei.Float64()
+				// cost in ETH
+				weiPerEth := mathbig.NewFloat(1e18)
+				gasUsedF := new(mathbig.Float).SetInt64(int64(rec.GasUsed))
+				costWeiF := new(mathbig.Float).Mul(new(mathbig.Float).SetInt(effPriceWei), gasUsedF)
+				costEthF := new(mathbig.Float).Quo(costWeiF, weiPerEth)
+				costEth, _ := costEthF.Float64()
 				payload := map[string]any{
 					"tenantId": tenant,
 					"contract": to,
 					"txHash": tx.Hash().Hex(),
 					"blockNumber": blk.Number().Uint64(),
+					"timestamp": blk.Time(),
+					"from": from,
+					"to": to,
+					"methodSignature": methodSig,
 					"gasUsed": rec.GasUsed,
+					"effectiveGasPriceGwei": effGweiF,
+					"baseFeeGwei": baseGweiF,
+					"priorityFeeGwei": prioGweiF,
+					"costEth": costEth,
 				}
 				value, _ := encodingjson.Marshal(payload)
 				msg := &sarama.ProducerMessage{Topic: topic, Value: sarama.ByteEncoder(value)}

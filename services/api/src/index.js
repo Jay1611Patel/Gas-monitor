@@ -55,7 +55,7 @@ const onchainHistogram = new client.Histogram({
   name: 'onchain_gas_used_histogram',
   help: 'Histogram of on-chain gasUsed per transaction per contract',
   buckets: [21000, 50000, 70000, 90000, 120000, 200000, 500000, 1000000, 5000000],
-  labelNames: ['tenantId', 'contract']
+  labelNames: ['tenantId', 'contract', 'methodSignature']
 });
 register.registerMetric(onchainHistogram);
 
@@ -63,9 +63,61 @@ const onchainSummary = new client.Summary({
   name: 'onchain_gas_used_summary',
   help: 'Summary of on-chain gasUsed per transaction per contract',
   percentiles: [0.5, 0.9, 0.95, 0.99],
-  labelNames: ['tenantId', 'contract']
+  labelNames: ['tenantId', 'contract', 'methodSignature']
 });
 register.registerMetric(onchainSummary);
+
+const onchainPriceHistogram = new client.Histogram({
+  name: 'onchain_effective_gas_price_gwei_histogram',
+  help: 'Histogram of effective gas price (gwei) per tx',
+  buckets: [1, 5, 10, 20, 50, 100, 200, 400],
+  labelNames: ['tenantId', 'contract']
+});
+register.registerMetric(onchainPriceHistogram);
+
+const onchainBaseFeeHistogram = new client.Histogram({
+  name: 'onchain_base_fee_gwei_histogram',
+  help: 'Histogram of base fee (gwei) per block',
+  buckets: [1, 5, 10, 20, 50, 100, 200, 400],
+  labelNames: ['tenantId']
+});
+register.registerMetric(onchainBaseFeeHistogram);
+
+const onchainPriorityFeeHistogram = new client.Histogram({
+  name: 'onchain_priority_fee_gwei_histogram',
+  help: 'Histogram of priority fee (gwei) per tx',
+  buckets: [0.1, 0.5, 1, 2, 5, 10, 20, 50],
+  labelNames: ['tenantId', 'contract']
+});
+register.registerMetric(onchainPriorityFeeHistogram);
+
+const onchainTxCostEthHistogram = new client.Histogram({
+  name: 'onchain_tx_cost_eth_histogram',
+  help: 'Histogram of transaction cost in ETH',
+  buckets: [0.00001, 0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01],
+  labelNames: ['tenantId', 'contract']
+});
+register.registerMetric(onchainTxCostEthHistogram);
+
+const onchainTxCount = new client.Counter({
+  name: 'onchain_tx_count',
+  help: 'Count of on-chain transactions per contract/method',
+  labelNames: ['tenantId', 'contract', 'methodSignature']
+});
+register.registerMetric(onchainTxCount);
+
+const onchainGasTotal = new client.Counter({
+  name: 'onchain_gas_total',
+  help: 'Total gas used per contract/method',
+  labelNames: ['tenantId', 'contract', 'methodSignature']
+});
+register.registerMetric(onchainGasTotal);
+
+const ethPriceUsd = new client.Gauge({
+  name: 'eth_price_usd',
+  help: 'ETH price in USD (Coingecko)'
+});
+register.registerMetric(ethPriceUsd);
 
 // SSE clients keyed by tenantId
 const tenantToClients = new Map();
@@ -383,10 +435,17 @@ app.post('/internal/reports/new', async (req, res) => {
 app.post('/internal/onchain/new', async (req, res) => {
   try {
     const doc = req.body || {};
-    const labels = { tenantId: String(doc.tenantId || ''), contract: String(doc.contract || '') };
-    const value = Number(doc.gasUsed) || 0;
-    onchainHistogram.observe(labels, value);
-    onchainSummary.observe(labels, value);
+    const baseLabels = { tenantId: String(doc.tenantId || '') };
+    const txLabels = { tenantId: String(doc.tenantId || ''), contract: String(doc.contract || ''), methodSignature: String(doc.methodSignature || '') };
+    const gasUsed = Number(doc.gasUsed) || 0;
+    onchainHistogram.observe(txLabels, gasUsed);
+    onchainSummary.observe(txLabels, gasUsed);
+    onchainTxCount.inc(txLabels);
+    onchainGasTotal.inc(txLabels, gasUsed);
+    if (doc.effectiveGasPriceGwei != null) onchainPriceHistogram.observe({ tenantId: txLabels.tenantId, contract: txLabels.contract }, Number(doc.effectiveGasPriceGwei));
+    if (doc.baseFeeGwei != null) onchainBaseFeeHistogram.observe(baseLabels, Number(doc.baseFeeGwei));
+    if (doc.priorityFeeGwei != null) onchainPriorityFeeHistogram.observe({ tenantId: txLabels.tenantId, contract: txLabels.contract }, Number(doc.priorityFeeGwei));
+    if (doc.costEth != null) onchainTxCostEthHistogram.observe({ tenantId: txLabels.tenantId, contract: txLabels.contract }, Number(doc.costEth));
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: String(err) });

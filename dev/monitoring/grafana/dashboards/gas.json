@@ -50,6 +50,36 @@
       ]
     },
     {
+      "type": "timeseries",
+      "title": "Effective Gas Price (gwei)",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(onchain_effective_gas_price_gwei_histogram_bucket{tenantId=~\"$tenant\",contract=~\"$onchain_contract\"}[5m])) by (le,contract))",
+          "legendFormat": "p95 price {{contract}}",
+          "refId": "E"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "BaseFee / PriorityFee (gwei)",
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(onchain_base_fee_gwei_histogram_bucket[5m])) by (le))", "legendFormat": "p95 baseFee", "refId": "F" },
+        { "expr": "histogram_quantile(0.95, sum(rate(onchain_priority_fee_gwei_histogram_bucket{tenantId=~\"$tenant\",contract=~\"$onchain_contract\"}[5m])) by (le,contract))", "legendFormat": "p95 priorityFee {{contract}}", "refId": "G" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Tx Cost (ETH) p95",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(onchain_tx_cost_eth_histogram_bucket{tenantId=~\"$tenant\",contract=~\"$onchain_contract\"}[5m])) by (le,contract))",
+          "legendFormat": "p95 cost {{contract}}",
+          "refId": "H"
+        }
+      ]
+    },
+    {
       "type": "table",
       "title": "Top Contracts by Gas (avg)",
       "targets": [
