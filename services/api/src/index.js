@@ -131,6 +131,7 @@ const reportsCol = db.collection('reports');
 const reposCol = db.collection('repos');
 const onchainCol = db.collection('onchain_metrics');
 const watchesCol = db.collection('onchain_watches');
+const watchStatusCol = db.collection('onchain_watch_status');
 
 // Kafka setup
 const kafka = new Kafka({ clientId: KAFKA_CLIENT_ID, brokers: [KAFKA_BROKER] });
@@ -314,7 +315,10 @@ app.get('/onchain/:address', authMiddleware, async (req, res) => {
 app.get('/onchain/watches', authMiddleware, async (req, res) => {
   const tenantId = req.user.tenantId;
   const items = await watchesCol.find({ tenantId }).sort({ createdAt: -1 }).toArray();
-  res.json({ items });
+  const statuses = await watchStatusCol.find({ tenantId }).toArray();
+  const map = new Map(statuses.map(s => [s.contract, s]));
+  const merged = items.map(w => ({ ...w, active: map.get(w.contract)?.active ?? false, updatedAt: map.get(w.contract)?.updatedAt || w.createdAt }));
+  res.json({ items: merged });
 });
 
 app.post('/onchain/watches', authMiddleware, async (req, res) => {
@@ -329,6 +333,9 @@ app.post('/onchain/watches', authMiddleware, async (req, res) => {
   );
   // publish watch add
   await producer.send({ topic: 'onchain-watch-requests', messages: [{ value: JSON.stringify({ tenantId, contract: address, action: 'add' }) }]});
+  // push SSE
+  const set = tenantToClients.get(tenantId);
+  if (set) { for (const r of set) { try { r.write(`event: watch\n`); r.write(`data: {"action":"add","contract":"${address}"}\n\n`); } catch {} } }
   res.json({ ok: true });
 });
 
@@ -338,6 +345,8 @@ app.delete('/onchain/watches/:contract', authMiddleware, async (req, res) => {
   await watchesCol.deleteOne({ tenantId, contract });
   // publish watch remove
   await producer.send({ topic: 'onchain-watch-requests', messages: [{ value: JSON.stringify({ tenantId, contract, action: 'remove' }) }]});
+  const set2 = tenantToClients.get(tenantId);
+  if (set2) { for (const r of set2) { try { r.write(`event: watch\n`); r.write(`data: {"action":"remove","contract":"${contract}"}\n\n`); } catch {} } }
   res.json({ ok: true });
 });
 
@@ -446,6 +455,28 @@ app.post('/internal/onchain/new', async (req, res) => {
     if (doc.baseFeeGwei != null) onchainBaseFeeHistogram.observe(baseLabels, Number(doc.baseFeeGwei));
     if (doc.priorityFeeGwei != null) onchainPriorityFeeHistogram.observe({ tenantId: txLabels.tenantId, contract: txLabels.contract }, Number(doc.priorityFeeGwei));
     if (doc.costEth != null) onchainTxCostEthHistogram.observe({ tenantId: txLabels.tenantId, contract: txLabels.contract }, Number(doc.costEth));
+    // push SSE for onchain update
+    const set = tenantToClients.get(txLabels.tenantId);
+    if (set) {
+      const payload = JSON.stringify({ type: 'onchain', contract: txLabels.contract, blockNumber: doc.blockNumber, txHash: doc.txHash });
+      for (const r of set) { try { r.write(`event: onchain\n`); r.write(`data: ${payload}\n\n`); } catch {} }
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// Internal: update watch status when poller observes activity
+app.post('/internal/onchain/status', async (req, res) => {
+  try {
+    const doc = req.body || {};
+    if (!doc.tenantId || !doc.contract) return res.json({ ok: true });
+    await watchStatusCol.updateOne(
+      { tenantId: String(doc.tenantId), contract: String(doc.contract).toLowerCase() },
+      { $set: { tenantId: String(doc.tenantId), contract: String(doc.contract).toLowerCase(), active: true, updatedAt: new Date() } },
+      { upsert: true }
+    );
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: String(err) });

@@ -186,6 +186,11 @@ func main() {
 				value, _ := encodingjson.Marshal(payload)
 				msg := &sarama.ProducerMessage{Topic: topic, Value: sarama.ByteEncoder(value)}
 				_, _, _ = producer.SendMessage(msg)
+				// mark active in status (best effort via API)
+				go func() {
+					apiBase := getenv("API_BASE", "http://api:4000")
+					nethttppkg.Post(apiBase+"/internal/onchain/status", "application/json", strings.NewReader(string(value)))
+				}()
 			}
 		}
 		last = head.NumberU64()

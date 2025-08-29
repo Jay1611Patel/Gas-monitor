@@ -118,6 +118,17 @@ export default function App() {
         }
       } catch {}
     })
+    es.addEventListener('watch', async (_ev: MessageEvent) => {
+      await loadWatches()
+    })
+    es.addEventListener('onchain', async (ev: MessageEvent) => {
+      try {
+        const p = JSON.parse(ev.data)
+        if (p?.contract && p.contract === onchainAddr) {
+          await loadOnchain()
+        }
+      } catch {}
+    })
     es.onerror = () => {}
     return () => es.close()
   }, [token, owner, repo, branch])
