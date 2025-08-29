@@ -118,15 +118,23 @@ Services:
 
 - Configure `services/poller/.env`:
   - `ETH_RPC_URL`
-  - `CONTRACT_ADDRESSES` (comma separated lowercase)
-  - `TENANT_ID` (your wallet address)
-- Restart poller only:
+  - `TENANT_ID` (your wallet address — used to scope watches and metrics)
+- Start poller only:
 
 ```bash
 docker compose up -d --build poller
 ```
 
-- In the dashboard, enter one of the contract addresses and click "Load" to visualize recent `gasUsed` per block transaction that hit your contract(s)
+- In the dashboard:
+  - Add a watched contract via the On-chain section (Watch button) — no need to edit env vars
+  - Your watches are stored per-tenant and picked up by the Go poller dynamically
+  - Click "Load" to fetch and visualize recent `gasUsed` per transaction
+
+How the Go Poller works
+- On start, it reads `ETH_RPC_URL` and `TENANT_ID`, then bootstraps watched addresses from the API: `GET /internal/onchain/watches?tenantId=<TENANT_ID>`.
+- It consumes Kafka topic `onchain-watch-requests` to add/remove watched contracts in real time.
+- It streams `gasUsed` for transactions hitting watched contracts to Kafka topic `onchain-gas`.
+- The consumer persists to Mongo and posts to the API, which updates Prometheus metrics (`onchain_gas_used_*`).
 
 ## GitHub App (Optional)
 
