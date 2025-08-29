@@ -30,9 +30,42 @@ client.collectDefaultMetrics({ register });
 const gasGauge = new client.Gauge({
   name: 'gas_execution_average',
   help: 'Average execution gas per contract/method',
-  labelNames: ['tenantId', 'owner', 'repo', 'branch', 'contract', 'method']
+  labelNames: ['tenantId', 'owner', 'repo', 'branch', 'contract', 'method', 'prNumber', 'commitSha']
 });
 register.registerMetric(gasGauge);
+
+const gasHistogram = new client.Histogram({
+  name: 'gas_execution_histogram',
+  help: 'Histogram of execution gas per contract/method',
+  buckets: [10000, 30000, 50000, 70000, 90000, 110000, 150000, 200000, 300000, 500000, 1000000],
+  labelNames: ['tenantId', 'owner', 'repo', 'branch', 'contract', 'method', 'prNumber', 'commitSha']
+});
+register.registerMetric(gasHistogram);
+
+const gasSummary = new client.Summary({
+  name: 'gas_execution_summary',
+  help: 'Summary of execution gas per contract/method',
+  percentiles: [0.5, 0.9, 0.95, 0.99],
+  labelNames: ['tenantId', 'owner', 'repo', 'branch', 'contract', 'method', 'prNumber', 'commitSha']
+});
+register.registerMetric(gasSummary);
+
+// On-chain gas metrics
+const onchainHistogram = new client.Histogram({
+  name: 'onchain_gas_used_histogram',
+  help: 'Histogram of on-chain gasUsed per transaction per contract',
+  buckets: [21000, 50000, 70000, 90000, 120000, 200000, 500000, 1000000, 5000000],
+  labelNames: ['tenantId', 'contract']
+});
+register.registerMetric(onchainHistogram);
+
+const onchainSummary = new client.Summary({
+  name: 'onchain_gas_used_summary',
+  help: 'Summary of on-chain gasUsed per transaction per contract',
+  percentiles: [0.5, 0.9, 0.95, 0.99],
+  labelNames: ['tenantId', 'contract']
+});
+register.registerMetric(onchainSummary);
 
 // SSE clients keyed by tenantId
 const tenantToClients = new Map();
@@ -273,10 +306,14 @@ app.post('/internal/reports/new', async (req, res) => {
           repo: doc.repo,
           branch: doc.branch || '',
           contract: item.contract || 'unknown',
-          method: item.method || 'unknown'
+          method: item.method || 'unknown',
+          prNumber: String(doc.prNumber ?? ''),
+          commitSha: String(doc.commitSha ?? '')
         };
         const value = Number(item.executionGasAverage) || 0;
         gasGauge.set(labels, value);
+        gasHistogram.observe(labels, value);
+        gasSummary.observe(labels, value);
       }
     }
     const set = tenantToClients.get(tenantId);
@@ -296,6 +333,20 @@ app.post('/internal/reports/new', async (req, res) => {
         try { r.write(`event: report\n`); r.write(`data: ${payload}\n\n`); } catch {}
       }
     }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// Internal hook for on-chain gas notification (called by consumer)
+app.post('/internal/onchain/new', async (req, res) => {
+  try {
+    const doc = req.body || {};
+    const labels = { tenantId: String(doc.tenantId || ''), contract: String(doc.contract || '') };
+    const value = Number(doc.gasUsed) || 0;
+    onchainHistogram.observe(labels, value);
+    onchainSummary.observe(labels, value);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: String(err) });

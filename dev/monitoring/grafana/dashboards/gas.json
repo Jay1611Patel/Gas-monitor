@@ -5,23 +5,47 @@
   "panels": [
     {
       "type": "timeseries",
-      "title": "Gas Execution Average by Contract/Method",
+      "title": "Avg Gas by Contract/Method",
       "targets": [
         {
-          "expr": "gas_execution_average{owner=~\"$owner\",repo=~\"$repo\",branch=~\"$branch\"}",
-          "legendFormat": "{{contract}}.{{method}} ({{branch}})",
+          "expr": "gas_execution_average{owner=~\"$owner\",repo=~\"$repo\",branch=~\"$branch\",contract=~\"$contract\",method=~\"$method\"}",
+          "legendFormat": "{{owner}}/{{repo}} {{branch}} {{contract}}.{{method}}",
           "refId": "A"
         }
       ],
       "options": {"legend": {"displayMode": "list"}},
       "fieldConfig": {"defaults": {"unit": "short"}}
+    },
+    {
+      "type": "histogram",
+      "title": "Gas Distribution",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(gas_execution_histogram_bucket{owner=~\"$owner\",repo=~\"$repo\",branch=~\"$branch\",contract=~\"$contract\",method=~\"$method\"}[5m])) by (le,contract,method))",
+          "legendFormat": "p95 {{contract}}.{{method}}",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Top Contracts by Gas (avg)",
+      "targets": [
+        {
+          "expr": "topk(10, gas_execution_average{owner=~\"$owner\",repo=~\"$repo\",branch=~\"$branch\"})",
+          "legendFormat": "{{contract}}.{{method}}",
+          "refId": "C"
+        }
+      ]
     }
   ],
   "templating": {
     "list": [
       {"name": "owner", "type": "textbox", "label": "Owner", "query": "", "current": {"text": ".*", "value": ".*"}},
       {"name": "repo", "type": "textbox", "label": "Repo", "query": "", "current": {"text": ".*", "value": ".*"}},
-      {"name": "branch", "type": "textbox", "label": "Branch", "query": "", "current": {"text": ".*", "value": ".*"}}
+      {"name": "branch", "type": "textbox", "label": "Branch", "query": "", "current": {"text": ".*", "value": ".*"}},
+      {"name": "contract", "type": "textbox", "label": "Contract", "query": "", "current": {"text": ".*", "value": ".*"}},
+      {"name": "method", "type": "textbox", "label": "Method", "query": "", "current": {"text": ".*", "value": ".*"}}
     ]
   },
   "title": "Gas Monitor",
